@@ -1,0 +1,1303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SALT Logo Studio</title>
+<!--
+  SALT Logo Studio — a single-file, no-build logo explorer.
+  Open this file in any modern browser. Everything is plain HTML/CSS/JS.
+
+  WHERE TO EDIT (all in the <script> at the bottom):
+    FONTS      – Google Fonts available in the pickers
+    PAIRINGS   – the curated font pairings shown as thumbnails
+    PALETTES   – colour palettes (bg / primary / accent / muted)
+    ICONS      – 24x24 SVG path data (stroke or fill)
+    STYLES     – each logo style is one draw(ctx, s, W, H) function on a canvas
+    ACRONYM_IDEAS / LETTER_IDEAS / TAGLINES – suggestion lists
+-->
+<style>
+  :root {
+    --bg: #f3f0e9; --surface: #ffffff; --ink: #1d1c1a; --muted: #6f6b63;
+    --line: #e3ded3; --soft: #ece8df; --accent: #1f3b5c; --accent-ink: #ffffff;
+    --checker-a: #e9e5dc; --checker-b: #f7f5f0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17181a; --surface: #212226; --ink: #ecebe8; --muted: #a09d96;
+      --line: #34353a; --soft: #2a2b30; --accent: #9cc3ea; --accent-ink: #10202f;
+      --checker-a: #2a2b30; --checker-b: #323338;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17181a; --surface: #212226; --ink: #ecebe8; --muted: #a09d96;
+    --line: #34353a; --soft: #2a2b30; --accent: #9cc3ea; --accent-ink: #10202f;
+    --checker-a: #2a2b30; --checker-b: #323338;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 14px/1.45 "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+
+  /* ---------- top bar & stepper ---------- */
+  .top {
+    display: flex; align-items: center; gap: 20px; padding: 12px 20px;
+    border-bottom: 1px solid var(--line); background: var(--surface);
+  }
+  .brand { font-weight: 800; letter-spacing: .14em; white-space: nowrap; }
+  .brand span { font-weight: 400; letter-spacing: 0; color: var(--muted); margin-left: 6px; }
+  .steps { display: flex; gap: 6px; flex: 1; overflow-x: auto; scrollbar-width: none; }
+  .step-btn {
+    display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px;
+    border: 1px solid var(--line); border-radius: 999px; background: transparent; white-space: nowrap;
+  }
+  .step-btn .n {
+    width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--soft); font-size: 12px; font-weight: 700;
+  }
+  .step-btn.done .n { background: var(--ink); color: var(--surface); }
+  .step-btn.active { border-color: var(--ink); background: var(--ink); color: var(--surface); }
+  .step-btn.active .n { background: var(--surface); color: var(--ink); }
+
+  .btn {
+    border: 1px solid var(--line); background: var(--surface); padding: 8px 14px;
+    border-radius: 10px; white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--muted); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  .btn.small { padding: 5px 10px; font-size: 13px; }
+
+  /* ---------- layout ---------- */
+  .layout { display: grid; grid-template-columns: 1fr 460px; height: calc(100vh - 59px); }
+  .stage { display: flex; flex-direction: column; min-width: 0; padding: 20px; gap: 14px; }
+  .canvas-wrap {
+    flex: 1; min-height: 0; display: grid; place-items: center; border-radius: 16px; padding: 24px;
+    background: repeating-conic-gradient(var(--checker-a) 0 25%, var(--checker-b) 0 50%) 0 0 / 22px 22px;
+  }
+  .canvas-wrap canvas {
+    max-width: 100%; max-height: 100%; width: auto; height: auto;
+    box-shadow: 0 10px 40px rgba(0,0,0,.12); border-radius: 4px;
+  }
+  .stage-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .stage-bar .info { flex: 1; color: var(--muted); font-size: 13px; min-width: 200px; }
+
+  .shortlist { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; min-height: 92px; align-items: center; }
+  .shortlist .empty { color: var(--muted); font-size: 13px; }
+  .short-item { position: relative; flex: 0 0 auto; }
+  .short-item button.pick {
+    width: 120px; height: 84px; padding: 4px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--surface);
+  }
+  .short-item canvas { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .short-item .x {
+    position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%;
+    border: 1px solid var(--line); background: var(--surface); font-size: 12px; line-height: 1; padding: 0;
+  }
+
+  /* ---------- side panel ---------- */
+  .panel { border-left: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
+  .panel-body { flex: 1; overflow-y: auto; padding: 22px 22px 30px; }
+  .panel-nav { display: flex; justify-content: space-between; gap: 10px; padding: 14px 22px; border-top: 1px solid var(--line); }
+  .step-panel { display: none; }
+  .step-panel.active { display: block; }
+  h2 { font-size: 22px; margin: 0 0 4px; letter-spacing: -.01em; }
+  h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 24px 0 10px; }
+  .lede { color: var(--muted); margin: 0 0 18px; }
+  .hint { color: var(--muted); font-size: 12.5px; margin: 6px 0 0; }
+
+  label.field { display: block; margin-bottom: 14px; }
+  label.field > span { display: block; font-weight: 600; margin-bottom: 6px; font-size: 13px; }
+  input[type=text], select {
+    width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg);
+  }
+  input[type=text]:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .row { display: flex; gap: 10px; align-items: center; }
+  .row > * { flex: 1; }
+  .check { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+  .range { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; margin-bottom: 14px; }
+  .range span { font-weight: 600; font-size: 13px; }
+  .range output { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+  .range input { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 4px 10px; font-size: 12.5px; }
+  .chip:hover { border-color: var(--muted); }
+
+  .words { display: grid; gap: 8px; }
+  .word-row { display: grid; grid-template-columns: 40px 1fr; gap: 10px; align-items: center; }
+  .word-row b { font-size: 26px; text-align: center; font-family: Georgia, serif; }
+
+  /* thumbnails (style / font / palette options rendered live) */
+  .thumbs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .thumb {
+    text-align: left; padding: 8px; border: 2px solid var(--line); border-radius: 14px; background: var(--surface);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .thumb:hover { border-color: var(--muted); }
+  .thumb.selected { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+  .thumb .frame {
+    aspect-ratio: 4 / 3; border-radius: 8px; overflow: hidden; display: grid; place-items: center;
+    background: repeating-conic-gradient(var(--checker-a) 0 25%, var(--checker-b) 0 50%) 0 0 / 14px 14px;
+  }
+  .thumb canvas { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .thumb .t-name { font-weight: 700; font-size: 13px; }
+  .thumb .t-desc { color: var(--muted); font-size: 12px; line-height: 1.35; }
+
+  .icons { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .icon-btn {
+    aspect-ratio: 1; border: 2px solid var(--line); border-radius: 12px; background: var(--bg);
+    display: grid; place-items: center; padding: 10px; position: relative;
+  }
+  .icon-btn svg { width: 100%; height: 100%; }
+  .icon-btn.selected { border-color: var(--accent); background: var(--surface); }
+  .icon-btn .lbl { position: absolute; bottom: 2px; left: 0; right: 0; font-size: 9.5px; color: var(--muted); text-align: center; }
+  .icon-btn .none { font-size: 12px; color: var(--muted); }
+  .icons .grp { grid-column: 1 / -1; font-size: 12px; font-weight: 600; color: var(--muted); margin: 8px 0 -2px; }
+
+  .colors { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .colors label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 600; }
+  .colors input[type=color] { width: 100%; height: 42px; border: 1px solid var(--line); border-radius: 10px; padding: 3px; background: var(--bg); }
+
+  .contexts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .ctx { border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+  .ctx .frame { aspect-ratio: 4 / 3; display: grid; place-items: center; padding: 10px; }
+  .ctx canvas { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .ctx .cap { font-size: 12px; padding: 6px 10px; color: var(--muted); background: var(--surface); border-top: 1px solid var(--line); }
+  .sizes { display: flex; align-items: flex-end; gap: 18px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+  .sizes figure { margin: 0; text-align: center; font-size: 11px; color: var(--muted); }
+  .sizes canvas { display: block; margin-bottom: 4px; }
+
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0;
+    background: var(--ink); color: var(--surface); padding: 10px 16px; border-radius: 10px; transition: .2s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%); }
+
+  @media (max-width: 960px) {
+    .layout { grid-template-columns: 1fr; height: auto; }
+    .stage { padding: 16px; }
+    .canvas-wrap { height: 52vh; flex: none; }
+    .panel { border-left: 0; border-top: 1px solid var(--line); }
+    .panel-body { padding: 18px 16px; }
+    .top { flex-wrap: wrap; padding: 10px 16px; }
+    .steps { order: 3; flex-basis: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">SALT<span>Logo Studio</span></div>
+  <nav class="steps" id="steps"></nav>
+  <button class="btn" id="surprise" title="Random combination">🎲 Surprise me</button>
+</header>
+
+<main class="layout">
+  <section class="stage">
+    <div class="canvas-wrap"><canvas id="preview"></canvas></div>
+    <div class="stage-bar">
+      <div class="info" id="stageInfo"></div>
+      <button class="btn" id="saveShort">♡ Save to shortlist</button>
+      <button class="btn primary" id="quickExport">Download PNG</button>
+    </div>
+    <div class="shortlist" id="shortlist"></div>
+  </section>
+
+  <aside class="panel">
+    <div class="panel-body">
+
+      <!-- STEP 1 — NAME -->
+      <div class="step-panel" data-step="name">
+        <h2>Start with the name</h2>
+        <p class="lede">Six short steps to find the look for SALT, a small church that meets in a home. Change anything at any time, save favourites to the shortlist as you go, and compare them at the end.</p>
+        <label class="field"><span>Name</span>
+          <input type="text" data-bind="name" maxlength="16">
+        </label>
+        <label class="field"><span>Tagline</span>
+          <input type="text" data-bind="tagline">
+          <div class="chips" id="taglineChips"></div>
+        </label>
+        <label class="field"><span>Small print</span>
+          <input type="text" data-bind="smallPrint">
+          <div class="chips" id="smallPrintChips"></div>
+          <p class="hint">Used around the round emblem and under the house badge. Try a verse, a street name or a founding year.</p>
+        </label>
+
+        <h3>What do the letters stand for?</h3>
+        <p class="hint" style="margin-top:-4px">Not decided yet? Leave these blank, or try a few ideas to see how a meaning changes the logo.</p>
+        <div class="words" id="words" style="margin-top:12px"></div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn small" id="suggestWords">✨ Suggest an acronym</button>
+          <button class="btn small" id="clearWords">Clear</button>
+        </div>
+        <label class="check"><input type="checkbox" data-bind="showWords"> Show the meaning on the logo</label>
+      </div>
+
+      <!-- STEP 2 — STYLE -->
+      <div class="step-panel" data-step="style">
+        <h2>Pick a direction</h2>
+        <p class="lede">Each card is your logo drawn in a different style. Choose the one that feels most like SALT. You can always come back.</p>
+        <div class="thumbs" id="styleThumbs"></div>
+        <h3>Fine-tune</h3>
+        <div class="range"><span>Corner roundness <small style="font-weight:400;color:var(--muted)">(tiles &amp; badges)</small></span><output data-for="radius"></output>
+          <input type="range" data-bind="radius" min="0" max="0.5" step="0.01"></div>
+      </div>
+
+      <!-- STEP 3 — ICON -->
+      <div class="step-panel" data-step="icon">
+        <h2>Choose a symbol</h2>
+        <p class="lede">A mark that works without words: on the front door, a social profile picture or a favicon. Start with home and table, or go with salt and faith.</p>
+        <div class="icons" id="iconGrid"></div>
+        <h3>Your own icon</h3>
+        <div class="row">
+          <label class="btn small" style="text-align:center">⬆ Upload PNG / SVG<input type="file" id="upload" accept="image/png,image/svg+xml,image/jpeg,image/webp" hidden></label>
+        </div>
+        <label class="check"><input type="checkbox" data-bind="tint"> Recolour uploaded icon to match the palette</label>
+        <h3>Adjust</h3>
+        <div class="range"><span>Icon size</span><output data-for="iconScale"></output>
+          <input type="range" data-bind="iconScale" min="0.4" max="1.8" step="0.05"></div>
+        <div class="range"><span>Vertical position <button class="chip" id="iconYReset" type="button" style="margin-left:6px;padding:1px 8px">Centre</button></span><output data-for="iconY"></output>
+          <input type="range" data-bind="iconY" min="-1" max="1" step="0.01"></div>
+        <div class="range"><span>Line weight</span><output data-for="stroke"></output>
+          <input type="range" data-bind="stroke" min="0.6" max="3.5" step="0.1"></div>
+      </div>
+
+      <!-- STEP 4 — TYPE -->
+      <div class="step-panel" data-step="type">
+        <h2>Find the voice</h2>
+        <p class="lede">Typefaces carry tone: classic, friendly, bold or modern. Each card pairs a headline font with a supporting one.</p>
+        <div class="thumbs" id="fontThumbs"></div>
+        <h3>Or pick your own</h3>
+        <label class="field"><span>Headline font</span><select data-bind="fontMain" id="fontMain"></select></label>
+        <label class="field"><span>Supporting font</span><select data-bind="fontSub" id="fontSub"></select></label>
+        <label class="field"><span>Headline weight</span>
+          <select data-bind="weight" data-num>
+            <option value="400">Regular</option><option value="700">Bold</option><option value="900">Black</option>
+          </select>
+        </label>
+        <div class="range"><span>Letter spacing</span><output data-for="tracking"></output>
+          <input type="range" data-bind="tracking" min="-0.06" max="0.6" step="0.01"></div>
+        <label class="check"><input type="checkbox" data-bind="capsTagline"> Uppercase supporting text</label>
+      </div>
+
+      <!-- STEP 5 — COLOUR -->
+      <div class="step-panel" data-step="colour">
+        <h2>Set the mood</h2>
+        <p class="lede">Salt of the earth, light of the world. Start from a palette, then tweak any colour.</p>
+        <div class="thumbs" id="paletteThumbs"></div>
+        <h3>Custom colours</h3>
+        <div class="colors">
+          <label>Background<input type="color" data-color="bg"></label>
+          <label>Primary<input type="color" data-color="primary"></label>
+          <label>Accent<input type="color" data-color="accent"></label>
+          <label>Muted<input type="color" data-color="muted"></label>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn small" id="invert">⇄ Swap background &amp; primary</button>
+        </div>
+        <label class="check"><input type="checkbox" data-bind="transparent"> Transparent background</label>
+      </div>
+
+      <!-- STEP 6 — REVIEW -->
+      <div class="step-panel" data-step="review">
+        <h2>Test &amp; export</h2>
+        <p class="lede">A good logo survives being inverted, shrunk and printed in one colour. Check yours here.</p>
+        <div class="contexts" id="contexts"></div>
+        <h3>Small sizes</h3>
+        <div class="sizes" id="sizes"></div>
+        <h3>Export</h3>
+        <label class="field"><span>PNG size</span>
+          <select data-bind="exportScale" data-num>
+            <option value="1">1× (standard)</option><option value="2">2× (high-res)</option><option value="4">4× (print)</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" data-bind="transparent"> Transparent background</label>
+        <div class="row" style="flex-wrap:wrap">
+          <button class="btn primary" id="exportBtn">Download PNG</button>
+          <button class="btn" id="exportAll">Download all shortlisted</button>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn small" id="copyJson">Copy settings (JSON)</button>
+          <button class="btn small" id="resetAll">Start over</button>
+        </div>
+      </div>
+
+    </div>
+    <div class="panel-nav">
+      <button class="btn" id="back">← Back</button>
+      <button class="btn primary" id="next">Next →</button>
+    </div>
+  </aside>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =====================================================================
+   CONFIG: edit these lists to add fonts, palettes, icons and ideas
+   ===================================================================== */
+
+// Google Fonts. `weights` must be weights the family actually has.
+const FONTS = [
+  { name: 'Cinzel',             cat: 'Serif',   weights: [400, 700, 900] },
+  { name: 'Cormorant Garamond', cat: 'Serif',   weights: [400, 600, 700] },
+  { name: 'Playfair Display',   cat: 'Serif',   weights: [400, 700, 900] },
+  { name: 'Fraunces',           cat: 'Serif',   weights: [400, 700, 900] },
+  { name: 'DM Serif Display',   cat: 'Serif',   weights: [400] },
+  { name: 'Libre Baskerville',  cat: 'Serif',   weights: [400, 700] },
+  { name: 'Lora',               cat: 'Serif',   weights: [400, 700] },
+  { name: 'Montserrat',         cat: 'Sans',    weights: [400, 700, 900] },
+  { name: 'Poppins',            cat: 'Sans',    weights: [400, 700, 900] },
+  { name: 'Raleway',            cat: 'Sans',    weights: [400, 700, 900] },
+  { name: 'Josefin Sans',       cat: 'Sans',    weights: [400, 700] },
+  { name: 'Inter',              cat: 'Sans',    weights: [400, 700, 900] },
+  { name: 'Outfit',             cat: 'Sans',    weights: [400, 700, 900] },
+  { name: 'Space Grotesk',      cat: 'Sans',    weights: [400, 700] },
+  { name: 'Bebas Neue',         cat: 'Display', weights: [400] },
+  { name: 'Archivo Black',      cat: 'Display', weights: [400] },
+  { name: 'Abril Fatface',      cat: 'Display', weights: [400] },
+  { name: 'Syne',               cat: 'Display', weights: [400, 700, 800] },
+];
+
+const PAIRINGS = [
+  { name: 'Timeless',     main: 'Cinzel',            sub: 'Cormorant Garamond', weight: 700 },
+  { name: 'Editorial',    main: 'Playfair Display',  sub: 'Inter',              weight: 900 },
+  { name: 'Friendly',     main: 'Poppins',           sub: 'Poppins',            weight: 700 },
+  { name: 'Bold',         main: 'Bebas Neue',        sub: 'Montserrat',         weight: 400 },
+  { name: 'Warm',         main: 'Fraunces',          sub: 'Outfit',             weight: 700 },
+  { name: 'Geometric',    main: 'Josefin Sans',      sub: 'Josefin Sans',       weight: 700 },
+  { name: 'Statement',    main: 'Abril Fatface',     sub: 'Raleway',            weight: 400 },
+  { name: 'Contemporary', main: 'Syne',              sub: 'Space Grotesk',      weight: 800 },
+  { name: 'Heavy',        main: 'Archivo Black',     sub: 'Inter',              weight: 400 },
+  { name: 'Bookish',      main: 'Libre Baskerville', sub: 'Lora',               weight: 700 },
+];
+
+// bg = background, primary = main letters, accent = icon & details, muted = supporting text
+const PALETTES = [
+  { name: 'Sea Salt',           bg: '#F6F3EC', primary: '#16324F', accent: '#3E7CB1', muted: '#6B7A8F' },
+  { name: 'Hearth',             bg: '#F7EFE5', primary: '#4A2C1D', accent: '#C8643B', muted: '#8C6A55' },
+  { name: 'Kitchen Table',      bg: '#F1F0E8', primary: '#2F3E34', accent: '#8AA37B', muted: '#6E7A70' },
+  { name: 'Light of the World', bg: '#0F1E33', primary: '#F4EBD9', accent: '#D4A93C', muted: '#9AA8BC' },
+  { name: 'Pink Himalayan',     bg: '#FBF1EC', primary: '#5A2E2A', accent: '#E08E79', muted: '#9C6B62' },
+  { name: 'Olive & Sand',       bg: '#EFE8DA', primary: '#3D4A2A', accent: '#A3833F', muted: '#7C7A63' },
+  { name: 'Ember',              bg: '#FFF8F0', primary: '#1F1A17', accent: '#D1495B', muted: '#7A6E66' },
+  { name: 'Coastal',            bg: '#E6F0F0', primary: '#0B3D3A', accent: '#2A9D8F', muted: '#5E7F7C' },
+  { name: 'Midnight Mint',      bg: '#12161C', primary: '#FFFFFF', accent: '#7FD1B9', muted: '#8A96A3' },
+  { name: 'Monochrome',         bg: '#FFFFFF', primary: '#111111', accent: '#111111', muted: '#666666' },
+];
+
+// Icons on a 24x24 grid. `fill: true` fills the path, otherwise it is stroked.
+// `group` sets the heading in the picker (icons without one go under "Salt & faith").
+const ICONS = {
+  houseCross: { label: 'House + cross', group: 'Home & gathering', d: 'M3 11l9-7.5 9 7.5 M5.5 9v11.5h13V9 M12 11v7 M9.5 13.5h5' },
+  house:      { label: 'House',     group: 'Home & gathering', d: 'M3 11l9-7.5 9 7.5 M5.5 9v11.5h13V9 M10 20.5v-5.5h4v5.5' },
+  houseHeart: { label: 'House + heart', group: 'Home & gathering', d: 'M3 11l9-7.5 9 7.5 M5.5 9v11.5h13V9 M12 18s-3.5-2-3.5-4.3a1.75 1.75 0 0 1 3.5-.6 1.75 1.75 0 0 1 3.5.6C15.5 16 12 18 12 18z' },
+  hearth:     { label: 'Hearth',    group: 'Home & gathering', d: 'M3 11l9-7.5 9 7.5 M5.5 9v11.5h13V9 M15.5 5.6V3h2.5v4.7 M9.5 20.5c0-2.2 2.5-2.8 2.5-5.5 1.2 1.6 2.5 2.8 2.5 5.5' },
+  door:       { label: 'Open door', group: 'Home & gathering', d: 'M4.5 21.5h15 M7 21.5V3h10v18.5 M7 3l6 2.2v16.3 M11 12.5h.01' },
+  window:     { label: 'Window light', group: 'Home & gathering', d: 'M5 21V9.5a7 7 0 0 1 14 0V21z M12 2.5V21 M5 13.5h14' },
+  table:      { label: 'Table',     group: 'Home & gathering', d: 'M2.5 12.5h19 M5 12.5v8 M19 12.5v8 M7.5 12.5V10h3.5v2.5 M14 12.5c0-2.2 1.1-3.5 2.5-3.5s2.5 1.3 2.5 3.5 M12 3v4 M10 5h4' },
+  cup:        { label: 'Communion', group: 'Home & gathering', d: 'M7 3.5h10c0 5-2 8-5 8s-5-3-5-8z M12 11.5v8 M8 20.5h8' },
+  bread:      { label: 'Bread',     group: 'Home & gathering', d: 'M5 11.5A3.8 3.8 0 0 1 6.5 4h11A3.8 3.8 0 0 1 19 11.5v8H5z M9.5 8l-1.5 2.5 M13 8l-1.5 2.5 M16.5 8 15 10.5' },
+  people:     { label: 'Gathered',  group: 'Home & gathering', d: 'M12 7.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z M5 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M19 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M7.5 21.5v-5.5a4.5 4.5 0 0 1 9 0v5.5 M2 19v-3a3 3 0 0 1 4.5-2.6 M22 19v-3a3 3 0 0 0-4.5-2.6' },
+  shaker:  { label: 'Shaker',   d: 'M8.5 10h7l1.2 10.2a1.5 1.5 0 0 1-1.5 1.8H8.8a1.5 1.5 0 0 1-1.5-1.8z M8.5 10c0-3.6 1.5-6.5 3.5-6.5s3.5 2.9 3.5 6.5 M10.8 6.6h.01 M13.2 6.6h.01 M12 4.9h.01' },
+  crystal:  { label: 'Crystal',  d: 'M12 2.5l8.5 4.75v9.5L12 21.5l-8.5-4.75v-9.5z M3.5 7.25L12 12l8.5-4.75 M12 12v9.5' },
+  grains:   { label: 'Grains',   fill: true, d: 'M7 3.5l2.5 2.5L7 8.5 4.5 6z M16.5 3l2 2-2 2-2-2z M12 9l3.2 3.2L12 15.4l-3.2-3.2z M5.5 14.5l2 2-2 2-2-2z M18 14l2.5 2.5L18 19l-2.5-2.5z M11.5 18.5l1.5 1.5-1.5 1.5-1.5-1.5z' },
+  cross:    { label: 'Cross',    d: 'M12 2.5v19 M6 8h12' },
+  drop:     { label: 'Drop',     d: 'M12 2.5c3.5 4.5 6.5 8 6.5 11.5a6.5 6.5 0 0 1-13 0C5.5 10.5 8.5 7 12 2.5z M12 11v7 M9.3 13.7h5.4' },
+  waves:    { label: 'Waves',    d: 'M2 8c2.5-2 4.5-2 6.67 0s4.17 2 6.67 0 4.16-2 6.66 0 M2 13c2.5-2 4.5-2 6.67 0s4.17 2 6.67 0 4.16-2 6.66 0 M2 18c2.5-2 4.5-2 6.67 0s4.17 2 6.67 0 4.16-2 6.66 0' },
+  fish:     { label: 'Ichthys',  d: 'M21.5 12C18 6.5 9.5 5 2.5 16.5 M21.5 12C18 17.5 9.5 19 2.5 7.5' },
+  flame:    { label: 'Flame',    fill: true, d: 'M12 2c.8 3.6 5.5 5.8 5.5 11.5a5.5 5.5 0 0 1-11 0c0-2.6 1.4-4.4 2.6-5.9.3 1.8 1 2.9 2.4 3.6-.6-3.4.1-6.5.5-9.2z' },
+  sun:      { label: 'Light',    d: 'M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8z M12 2v2.5 M12 19.5V22 M4.9 4.9l1.8 1.8 M17.3 17.3l1.8 1.8 M2 12h2.5 M19.5 12H22 M4.9 19.1l1.8-1.8 M17.3 6.7l1.8-1.8' },
+  dove:     { label: 'Dove',     fill: true, d: 'M2 14c2.5 0 4.5-.8 6-2.5C9.2 8.4 10.6 5.5 13 3.5c.3 2.6-.2 5-1.2 7 2.7-2 6-2.6 9.7-1.8-1.9.8-3.3 2.2-4 4-1.2 3.3-4.3 5.3-8 5.3-3.2 0-5.8-1.4-7.5-4z' },
+  heart:    { label: 'Heart',    fill: true, d: 'M12 20.5s-8.5-5-8.5-11A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 8.5 2.5c0 6-8.5 11-8.5 11z' },
+  book:     { label: 'Bible',    d: 'M2.5 5h6A3.5 3.5 0 0 1 12 8.5V20a2.5 2.5 0 0 0-2.5-2.5h-7z M21.5 5h-6A3.5 3.5 0 0 0 12 8.5V20a2.5 2.5 0 0 1 2.5-2.5h7z' },
+  mountain: { label: 'Mountain', d: 'M2 20l7-12 4.5 6.5L16 11l6 9z' },
+  crown:    { label: 'Crown',    d: 'M3.5 19h17 M4.5 16l-1.5-9 5 4 4-7 4 7 5-4-1.5 9z' },
+};
+
+const TAGLINES = ['A Home Church', 'Church at Home', 'Gathered at the Table', 'Open Door · Open Table',
+  'Church', 'Salt of the Earth', 'Light of the World'];
+const SMALL_PRINTS = ['A Home Church · Matthew 5:13', 'Breaking bread in our homes · Acts 2:46',
+  'Where two or three gather · Matthew 18:20', 'Salt of the Earth · Matthew 5:13'];
+
+// Complete acronym ideas for S-A-L-T (shuffled through by "Suggest")
+const ACRONYM_IDEAS = [
+  ['Sharing', 'At home', 'Loving', 'Together'],
+  ['Small', 'And', 'Loving', 'Together'],
+  ['Sharing', 'A', 'Living', 'Table'],
+  ['Simple', 'Authentic', 'Loving', 'Together'],
+  ['Serving', 'Abiding', 'Loving', 'Together'],
+  ['Saved', 'Alive', 'Loved', 'Transformed'],
+  ['Spirit', 'And', 'Light', 'Truth'],
+  ['Seek', 'Abide', 'Love', 'Tell'],
+  ['Sent', 'Anchored', 'Loved', 'Together'],
+  ['Serve', 'Adore', 'Learn', 'Testify'],
+  ['Seeking', 'And', 'Living', 'Truth'],
+  ['Saints', 'Alive', 'Living', 'Together'],
+];
+// Fallback ideas per letter (used when the name isn't SALT)
+const LETTER_IDEAS = {
+  S: ['Sharing', 'Serving', 'Small', 'Simple', 'Saved', 'Spirit', 'Sent'], A: ['At home', 'Abiding', 'Alive', 'Authentic', 'Anchored'],
+  L: ['Loving', 'Light', 'Living', 'Life'], T: ['Together', 'Table', 'Truth', 'Transformed', 'Thriving'],
+  C: ['Community', 'Christ', 'Called'], H: ['Home', 'Hope', 'Holy', 'Hearth'], G: ['Grace', 'Gathered'], F: ['Faith', 'Family'],
+};
+
+/* =====================================================================
+   DRAWING HELPERS
+   ===================================================================== */
+
+function fontInfo(name) { return FONTS.find(f => f.name === name) || { weights: [400] }; }
+function nearestWeight(name, w) {
+  return fontInfo(name).weights.reduce((a, b) => Math.abs(b - w) < Math.abs(a - w) ? b : a);
+}
+const mainW = s => nearestWeight(s.fontMain, s.weight);
+const subW  = (s, w = 400) => nearestWeight(s.fontSub, w);
+const caps  = (s, t) => s.capsTagline ? (t || '').toUpperCase() : (t || '');
+const letters = s => [...(s.name || '').replace(/\s+/g, '')];
+const wordsLine = s => s.showWords ? caps(s, s.words.map(w => w.trim()).filter(Boolean).join('  ·  ')) : '';
+const hasIcon = s => s.icon !== 'none' && (s.icon !== 'custom' || !!s.customSrc);
+
+function setFont(ctx, family, weight, size) {
+  ctx.font = `${weight} ${size}px "${family}", Georgia, serif`;
+  ctx.__size = size;
+}
+// Height of a capital letter in the current font: used to centre text optically
+function capOf(ctx) {
+  return ctx.measureText('H').actualBoundingBoxAscent || ctx.__size * 0.7;
+}
+function spacedWidth(ctx, text, sp) {
+  const chars = [...text];
+  if (!chars.length) return 0;
+  if (!sp) return ctx.measureText(text).width;
+  return chars.reduce((w, ch) => w + ctx.measureText(ch).width, 0) + sp * (chars.length - 1);
+}
+// Draws text with letter-spacing `sp`, capitals vertically centred on `cy`. Returns the width.
+function drawSpaced(ctx, text, x, cy, sp = 0, align = 'center') {
+  const w = spacedWidth(ctx, text, sp);
+  const y = cy + capOf(ctx) / 2;
+  let cx = align === 'center' ? x - w / 2 : align === 'right' ? x - w : x;
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+  if (!sp) { ctx.fillText(text, cx, y); return w; }
+  for (const ch of text) { ctx.fillText(ch, cx, y); cx += ctx.measureText(ch).width + sp; }
+  return w;
+}
+// Shrinks font size until text fits maxW. Leaves the font set on ctx. Returns the size.
+function fitFont(ctx, text, family, weight, maxW, size, track = 0) {
+  for (let i = 0; i < 80; i++) {
+    setFont(ctx, family, weight, size);
+    if (spacedWidth(ctx, text, size * track) <= maxW || size < 6) break;
+    size *= 0.95;
+  }
+  return size;
+}
+function arcText(ctx, text, cx, cy, r, top, sp = 0) {
+  const chars = [...text];
+  if (!chars.length) return;
+  const ws = chars.map(ch => ctx.measureText(ch).width);
+  const total = ws.reduce((a, b) => a + b, 0) + sp * (chars.length - 1);
+  let a = top ? -Math.PI / 2 - total / r / 2 : Math.PI / 2 + total / r / 2;
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  chars.forEach((ch, i) => {
+    const h = ws[i] / 2 / r;
+    a += top ? h : -h;
+    ctx.save();
+    ctx.translate(cx + r * Math.cos(a), cy + r * Math.sin(a));
+    ctx.rotate(top ? a + Math.PI / 2 : a - Math.PI / 2);
+    ctx.fillText(ch, 0, 0);
+    ctx.restore();
+    a += top ? h + sp / r : -(h + sp / r);
+  });
+  ctx.restore();
+}
+function rrect(ctx, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function line(ctx, x1, y1, x2, y2) { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+function fillBg(ctx, s, W, H) { if (!s.transparent) { ctx.fillStyle = s.colors.bg; ctx.fillRect(0, 0, W, H); } }
+
+const imgCache = {};
+function getImg(src) {
+  if (!src) return null;
+  if (!imgCache[src]) { const im = new Image(); im.onload = scheduleRender; im.src = src; imgCache[src] = im; }
+  return imgCache[src];
+}
+function drawIcon(ctx, s, cx, cy, size, color) {
+  if (!hasIcon(s)) return;
+  cy += (s.iconY || 0) * size; // vertical nudge, as a fraction of the icon's size
+  ctx.save();
+  if (s.icon === 'custom') {
+    const img = getImg(s.customSrc);
+    if (img && img.complete && img.naturalWidth) {
+      const k = Math.min(size / img.naturalWidth, size / img.naturalHeight);
+      const w = img.naturalWidth * k, h = img.naturalHeight * k;
+      if (s.tint) {
+        const scale = Math.max(1, ctx.getTransform().a);
+        const oc = document.createElement('canvas');
+        oc.width = Math.ceil(w * scale); oc.height = Math.ceil(h * scale);
+        const o = oc.getContext('2d');
+        o.drawImage(img, 0, 0, oc.width, oc.height);
+        o.globalCompositeOperation = 'source-in';
+        o.fillStyle = color; o.fillRect(0, 0, oc.width, oc.height);
+        ctx.drawImage(oc, cx - w / 2, cy - h / 2, w, h);
+      } else {
+        ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
+      }
+    }
+    ctx.restore();
+    return;
+  }
+  const ic = ICONS[s.icon];
+  ctx.translate(cx - size / 2, cy - size / 2);
+  ctx.scale(size / 24, size / 24);
+  const p = new Path2D(ic.d);
+  if (ic.fill) { ctx.fillStyle = color; ctx.fill(p); }
+  else {
+    ctx.strokeStyle = color; ctx.lineWidth = s.stroke;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(p);
+  }
+  ctx.restore();
+}
+
+/* =====================================================================
+   LOGO STYLES: each draws onto a W x H canvas. Add your own here.
+   ===================================================================== */
+const STYLES = {
+  house: {
+    label: 'House Badge', desc: 'The name lives inside a little house, because SALT is a church that meets in a home.',
+    w: 1200, h: 1250,
+    draw(ctx, s, W, H) {
+      const c = s.colors, hx = 170, hw = 860, top = 100, eave = 440, base = 1150, mid = W / 2;
+      const slope = x => top + Math.abs(x - mid) / (hw / 2) * (eave - top);
+      fillBg(ctx, s, W, H);
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+
+      // chimney (open at the bottom so it meets the roof line)
+      const cx1 = hx + hw - 230, cx2 = hx + hw - 140;
+      ctx.strokeStyle = c.primary; ctx.lineWidth = 18;
+      ctx.beginPath();
+      ctx.moveTo(cx1, slope(cx1)); ctx.lineTo(cx1, top + 90); ctx.lineTo(cx2, top + 90); ctx.lineTo(cx2, slope(cx2));
+      ctx.stroke();
+
+      // outer house
+      ctx.beginPath();
+      ctx.moveTo(hx, eave); ctx.lineTo(mid, top); ctx.lineTo(hx + hw, eave);
+      ctx.lineTo(hx + hw, base); ctx.lineTo(hx, base); ctx.closePath();
+      ctx.stroke();
+      // inner keyline
+      const i = 34;
+      ctx.strokeStyle = c.accent; ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(hx + i, eave + i * 0.45); ctx.lineTo(mid, top + i * 1.25); ctx.lineTo(hx + hw - i, eave + i * 0.45);
+      ctx.lineTo(hx + hw - i, base - i); ctx.lineTo(hx + i, base - i); ctx.closePath();
+      ctx.stroke();
+
+      // symbol in the roof
+      drawIcon(ctx, s, mid, top + (eave - top) * 0.63, 170 * s.iconScale, c.accent);
+
+      // text in the body
+      const maxW = hw - 150, tag = caps(s, s.tagline), wl = wordsLine(s), sp = caps(s, s.smallPrint);
+      const nS = fitFont(ctx, s.name, s.fontMain, mainW(s), maxW, 230, s.tracking), nCap = capOf(ctx);
+      const tS = fitFont(ctx, tag, s.fontSub, subW(s, 700), maxW, 54, 0.26), tCap = capOf(ctx);
+      const wS = fitFont(ctx, wl, s.fontSub, subW(s), maxW, 34, 0.1), wCap = capOf(ctx);
+      const pS = fitFont(ctx, sp, s.fontSub, subW(s), maxW, 28, 0.12), pCap = capOf(ctx);
+      const block = nCap + (tag ? 60 + tCap : 0) + (wl ? 45 + wCap : 0) + (sp ? 70 + pCap : 0);
+      let y = (eave + 20 + base - i) / 2 - block / 2;
+      setFont(ctx, s.fontMain, mainW(s), nS); ctx.fillStyle = c.primary;
+      drawSpaced(ctx, s.name, mid, y + nCap / 2, nS * s.tracking); y += nCap;
+      if (tag) {
+        y += 60; setFont(ctx, s.fontSub, subW(s, 700), tS); ctx.fillStyle = c.accent;
+        drawSpaced(ctx, tag, mid, y + tCap / 2, tS * 0.26); y += tCap;
+      }
+      if (wl) {
+        y += 45; setFont(ctx, s.fontSub, subW(s), wS); ctx.fillStyle = c.muted;
+        drawSpaced(ctx, wl, mid, y + wCap / 2, wS * 0.1); y += wCap;
+      }
+      if (sp) {
+        y += 70; setFont(ctx, s.fontSub, subW(s), pS); ctx.fillStyle = c.muted;
+        drawSpaced(ctx, sp, mid, y + pCap / 2, pS * 0.12);
+      }
+    },
+  },
+
+  wordmark: {
+    label: 'Classic Wordmark', desc: 'Big, confident letters with a ruled tagline. Timeless and flexible.',
+    w: 1600, h: 900,
+    draw(ctx, s, W, H) {
+      const c = s.colors, icon = hasIcon(s), iS = 150 * s.iconScale, wl = wordsLine(s), tag = caps(s, s.tagline);
+      const nS = fitFont(ctx, s.name, s.fontMain, mainW(s), W * 0.82, 300, s.tracking), nCap = capOf(ctx);
+      const tS = fitFont(ctx, tag, s.fontSub, subW(s), W * 0.55, 62, 0.32), tCap = capOf(ctx);
+      const wS = fitFont(ctx, wl, s.fontSub, subW(s), W * 0.8, 38, 0.12), wCap = capOf(ctx);
+      const block = (icon ? iS + 60 : 0) + nCap + (tag ? 70 + tCap : 0) + (wl ? 45 + wCap : 0);
+      let y = (H - block) / 2;
+      fillBg(ctx, s, W, H);
+      if (icon) { drawIcon(ctx, s, W / 2, y + iS / 2, iS, c.accent); y += iS + 60; }
+      setFont(ctx, s.fontMain, mainW(s), nS); ctx.fillStyle = c.primary;
+      drawSpaced(ctx, s.name, W / 2, y + nCap / 2, nS * s.tracking); y += nCap;
+      if (tag) {
+        y += 70;
+        setFont(ctx, s.fontSub, subW(s), tS); ctx.fillStyle = c.muted;
+        const tw = drawSpaced(ctx, tag, W / 2, y + tCap / 2, tS * 0.32);
+        ctx.strokeStyle = c.accent; ctx.lineWidth = 3;
+        const ry = y + tCap / 2, len = Math.min(170, (W - tw) / 2 - 90);
+        line(ctx, W / 2 - tw / 2 - 40, ry, W / 2 - tw / 2 - 40 - len, ry);
+        line(ctx, W / 2 + tw / 2 + 40, ry, W / 2 + tw / 2 + 40 + len, ry);
+        y += tCap;
+      }
+      if (wl) {
+        y += 45;
+        setFont(ctx, s.fontSub, subW(s), wS); ctx.fillStyle = c.muted;
+        drawSpaced(ctx, wl, W / 2, y + wCap / 2, wS * 0.12);
+      }
+    },
+  },
+
+  emblem: {
+    label: 'Round Emblem', desc: 'A badge with text around the ring. Great for stamps, merch and socials.',
+    w: 1200, h: 1200,
+    draw(ctx, s, W, H) {
+      const c = s.colors, cx = W / 2, cy = H / 2, R1 = 540, R2 = 430, rT = (R1 + R2) / 2;
+      fillBg(ctx, s, W, H);
+      ctx.strokeStyle = c.accent;
+      ctx.lineWidth = 16; ctx.beginPath(); ctx.arc(cx, cy, R1, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = 5;  ctx.beginPath(); ctx.arc(cx, cy, R2, 0, Math.PI * 2); ctx.stroke();
+
+      const arcAvail = Math.PI * rT * 0.78;
+      ctx.fillStyle = c.primary;
+      const top = caps(s, s.tagline), bottom = caps(s, s.smallPrint);
+      let sz = fitFont(ctx, top, s.fontSub, subW(s, 700), arcAvail, 54, 0.22);
+      arcText(ctx, top, cx, cy, rT, true, sz * 0.22);
+      sz = fitFont(ctx, bottom, s.fontSub, subW(s, 700), arcAvail, 40, 0.22);
+      arcText(ctx, bottom, cx, cy, rT, false, sz * 0.22);
+      ctx.fillStyle = c.accent;
+      [cx - rT, cx + rT].forEach(x => { ctx.beginPath(); ctx.arc(x, cy, 9, 0, Math.PI * 2); ctx.fill(); });
+
+      const icon = hasIcon(s), iS = 210 * s.iconScale, wl = wordsLine(s);
+      const nS = fitFont(ctx, s.name, s.fontMain, mainW(s), 600, 210, s.tracking), nCap = capOf(ctx);
+      const wS = fitFont(ctx, wl, s.fontSub, subW(s), 520, 34, 0.1), wCap = capOf(ctx);
+      const block = (icon ? iS + 40 : 0) + nCap + (wl ? 45 + wCap : 0);
+      let y = cy - block / 2;
+      if (icon) { drawIcon(ctx, s, cx, y + iS / 2, iS, c.accent); y += iS + 40; }
+      setFont(ctx, s.fontMain, mainW(s), nS); ctx.fillStyle = c.primary;
+      drawSpaced(ctx, s.name, cx, y + nCap / 2, nS * s.tracking); y += nCap;
+      if (wl) {
+        y += 45; setFont(ctx, s.fontSub, subW(s), wS); ctx.fillStyle = c.muted;
+        drawSpaced(ctx, wl, cx, y + wCap / 2, wS * 0.1);
+      }
+    },
+  },
+
+  stacked: {
+    label: 'Stacked Acronym', desc: 'Letters stacked to spell out what SALT means. Perfect once the words are chosen.',
+    w: 1400, h: 1200,
+    draw(ctx, s, W, H) {
+      const c = s.colors, L = letters(s), n = Math.max(L.length, 1), pad = 110;
+      const tag = caps(s, s.tagline), bottom = H - (tag ? 210 : pad);
+      const rowH = (bottom - pad) / n, ls = Math.min(rowH, 340);
+      fillBg(ctx, s, W, H);
+      setFont(ctx, s.fontMain, mainW(s), ls);
+      const cap = capOf(ctx), colW = Math.max(0, ...L.map(ch => ctx.measureText(ch).width));
+      const x0 = pad + 56;
+      ctx.fillStyle = c.accent;
+      ctx.fillRect(pad, pad + rowH / 2 - cap / 2, 12, (n - 1) * rowH + cap);
+
+      const icon = hasIcon(s), iS = 170 * s.iconScale;
+      if (icon) drawIcon(ctx, s, W - pad - iS / 2, pad + iS / 2, iS, c.accent);
+
+      L.forEach((ch, i) => {
+        const cy = pad + rowH * (i + 0.5), baseY = cy + cap / 2;
+        setFont(ctx, s.fontMain, mainW(s), ls); ctx.fillStyle = c.primary;
+        drawSpaced(ctx, ch, x0, cy, 0, 'left');
+        if (!s.showWords) return;
+        const lw = ctx.measureText(ch).width, word = (s.words[i] || '').trim();
+        if (word) {
+          const starts = word[0].toUpperCase() === ch.toUpperCase();
+          const rest = caps(s, starts ? word.slice(1) : word);
+          const rx = starts ? x0 + lw + ls * 0.05 : x0 + colW + ls * 0.25;
+          const limit = W - rx - pad - (icon && i === 0 ? iS + 30 : 0);
+          const rS = fitFont(ctx, rest, s.fontSub, subW(s, 700), limit, rowH * 0.34, 0.1);
+          ctx.fillStyle = c.muted;
+          drawSpaced(ctx, rest, rx, baseY - capOf(ctx) / 2, rS * 0.1, 'left');
+        } else {
+          ctx.save();
+          ctx.strokeStyle = c.muted; ctx.globalAlpha = 0.35; ctx.lineWidth = 4; ctx.setLineDash([14, 12]);
+          line(ctx, x0 + colW + ls * 0.25, baseY, x0 + colW + ls * 0.25 + 260, baseY);
+          ctx.restore();
+        }
+      });
+      if (tag) {
+        const tS = fitFont(ctx, tag, s.fontSub, subW(s), W - x0 - pad, 58, 0.3);
+        ctx.fillStyle = c.muted;
+        drawSpaced(ctx, tag, x0, H - pad - 40, tS * 0.3, 'left');
+      }
+    },
+  },
+
+  monogram: {
+    label: 'Tile Monogram', desc: 'Each letter on its own tile. Modern, graphic and easy to spot.',
+    w: 1200, h: 1200,
+    draw(ctx, s, W, H) {
+      const c = s.colors, L = letters(s), n = Math.max(L.length, 1);
+      const cols = n <= 3 ? n : Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols);
+      const gap = 26, tile = (820 - gap * (cols - 1)) / cols;
+      const gridW = cols * tile + gap * (cols - 1), gridH = rows * tile + gap * (rows - 1);
+      const tag = caps(s, s.tagline), wl = wordsLine(s), icon = hasIcon(s);
+      const tS = fitFont(ctx, tag, s.fontSub, subW(s, 700), 700, 54, 0.3), tCap = capOf(ctx);
+      const wS = fitFont(ctx, wl, s.fontSub, subW(s), 900, 38, 0.1), wCap = capOf(ctx);
+      const block = gridH + (tag || icon ? 80 + Math.max(tCap, 40) : 0) + (wl ? 40 + wCap : 0);
+      const gx = (W - gridW) / 2;
+      let y = (H - block) / 2;
+      fillBg(ctx, s, W, H);
+      L.forEach((ch, i) => {
+        const r = Math.floor(i / cols), col = i % cols;
+        const x = gx + col * (tile + gap), ty = y + r * (tile + gap);
+        ctx.fillStyle = (r + col) % 2 ? c.accent : c.primary;
+        rrect(ctx, x, ty, tile, tile, tile * s.radius); ctx.fill();
+        fitFont(ctx, ch, s.fontMain, mainW(s), tile * 0.75, tile * 0.62);
+        ctx.fillStyle = c.bg;
+        drawSpaced(ctx, ch, x + tile / 2, ty + tile / 2);
+      });
+      y += gridH;
+      if (tag || icon) {
+        y += 80;
+        const rowCap = Math.max(tCap, 40), iS = 64 * s.iconScale;
+        setFont(ctx, s.fontSub, subW(s, 700), tS);
+        const tw = spacedWidth(ctx, tag, tS * 0.3), total = (icon ? iS + (tag ? 28 : 0) : 0) + tw;
+        let x = W / 2 - total / 2;
+        if (icon) { drawIcon(ctx, s, x + iS / 2, y + rowCap / 2, iS, c.accent); x += iS + 28; }
+        ctx.fillStyle = c.primary;
+        drawSpaced(ctx, tag, x, y + rowCap / 2, tS * 0.3, 'left');
+        y += rowCap;
+      }
+      if (wl) {
+        y += 40; setFont(ctx, s.fontSub, subW(s), wS); ctx.fillStyle = c.muted;
+        drawSpaced(ctx, wl, W / 2, y + wCap / 2, wS * 0.1);
+      }
+    },
+  },
+
+  lockup: {
+    label: 'Horizontal Lockup', desc: 'Symbol beside the name. Fits website headers, banners and email footers.',
+    w: 1800, h: 700,
+    draw(ctx, s, W, H) {
+      const c = s.colors, B = 380, bx = 110, by = (H - B) / 2;
+      fillBg(ctx, s, W, H);
+      ctx.fillStyle = c.accent;
+      rrect(ctx, bx, by, B, B, B * s.radius); ctx.fill();
+      if (hasIcon(s)) drawIcon(ctx, s, bx + B / 2, by + B / 2, B * 0.58 * s.iconScale, c.bg);
+      else {
+        const first = letters(s)[0] || '';
+        fitFont(ctx, first, s.fontMain, mainW(s), B * 0.7, B * 0.6);
+        ctx.fillStyle = c.bg; drawSpaced(ctx, first, bx + B / 2, by + B / 2);
+      }
+      const dx = bx + B + 70;
+      ctx.save(); ctx.strokeStyle = c.muted; ctx.globalAlpha = 0.45; ctx.lineWidth = 4;
+      line(ctx, dx, by + 30, dx, by + B - 30); ctx.restore();
+
+      const tx = dx + 70, maxW = W - tx - 100, tag = caps(s, s.tagline), wl = wordsLine(s);
+      const nS = fitFont(ctx, s.name, s.fontMain, mainW(s), maxW, 240, s.tracking), nCap = capOf(ctx);
+      const tS = fitFont(ctx, tag, s.fontSub, subW(s), maxW, 66, 0.28), tCap = capOf(ctx);
+      const wS = fitFont(ctx, wl, s.fontSub, subW(s), maxW, 42, 0.1), wCap = capOf(ctx);
+      const block = nCap + (tag ? 55 + tCap : 0) + (wl ? 40 + wCap : 0);
+      let y = (H - block) / 2;
+      setFont(ctx, s.fontMain, mainW(s), nS); ctx.fillStyle = c.primary;
+      drawSpaced(ctx, s.name, tx, y + nCap / 2, nS * s.tracking, 'left'); y += nCap;
+      if (tag) {
+        y += 55; setFont(ctx, s.fontSub, subW(s), tS); ctx.fillStyle = c.muted;
+        drawSpaced(ctx, tag, tx, y + tCap / 2, tS * 0.28, 'left'); y += tCap;
+      }
+      if (wl) {
+        y += 40; setFont(ctx, s.fontSub, subW(s), wS); ctx.fillStyle = c.muted;
+        drawSpaced(ctx, wl, tx, y + wCap / 2, wS * 0.1, 'left');
+      }
+    },
+  },
+
+  arch: {
+    label: 'Arch Window', desc: 'A church-window arch holding the symbol over waves. Warm and rooted.',
+    w: 1200, h: 1400,
+    draw(ctx, s, W, H) {
+      const c = s.colors, aw = 560, ah = 640, ax = (W - aw) / 2;
+      const tag = caps(s, s.tagline), wl = wordsLine(s);
+      const nS = fitFont(ctx, s.name, s.fontMain, mainW(s), W * 0.8, 230, s.tracking), nCap = capOf(ctx);
+      const tS = fitFont(ctx, tag, s.fontSub, subW(s), W * 0.8, 60, 0.3), tCap = capOf(ctx);
+      const wS = fitFont(ctx, wl, s.fontSub, subW(s), W * 0.85, 38, 0.1), wCap = capOf(ctx);
+      const block = ah + 90 + nCap + (tag ? 60 + tCap : 0) + (wl ? 40 + wCap : 0);
+      const ay = (H - block) / 2;
+      fillBg(ctx, s, W, H);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(ax, ay + ah);
+      ctx.lineTo(ax, ay + aw / 2);
+      ctx.arc(W / 2, ay + aw / 2, aw / 2, Math.PI, 0);
+      ctx.lineTo(ax + aw, ay + ah);
+      ctx.closePath();
+      ctx.fillStyle = c.primary; ctx.fill();
+      ctx.clip();
+      ctx.strokeStyle = c.accent; ctx.lineWidth = 12; ctx.lineCap = 'round';
+      for (let k = 0; k < 3; k++) {
+        const yy = ay + ah - 50 - k * 50;
+        ctx.globalAlpha = 1 - k * 0.28;
+        ctx.beginPath();
+        for (let x = ax - 20; x <= ax + aw + 20; x += 4) {
+          const wy = yy + Math.sin((x - ax) / aw * Math.PI * 4 + k * 1.3) * 10;
+          x === ax - 20 ? ctx.moveTo(x, wy) : ctx.lineTo(x, wy);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+      drawIcon(ctx, s, W / 2, ay + aw / 2 + 30, 280 * s.iconScale, c.bg);
+
+      let y = ay + ah + 90;
+      setFont(ctx, s.fontMain, mainW(s), nS); ctx.fillStyle = c.primary;
+      drawSpaced(ctx, s.name, W / 2, y + nCap / 2, nS * s.tracking); y += nCap;
+      if (tag) {
+        y += 60; setFont(ctx, s.fontSub, subW(s), tS); ctx.fillStyle = c.muted;
+        drawSpaced(ctx, tag, W / 2, y + tCap / 2, tS * 0.3); y += tCap;
+      }
+      if (wl) {
+        y += 40; setFont(ctx, s.fontSub, subW(s), wS); ctx.fillStyle = c.muted;
+        drawSpaced(ctx, wl, W / 2, y + wCap / 2, wS * 0.1);
+      }
+    },
+  },
+};
+
+/* =====================================================================
+   STATE
+   ===================================================================== */
+const DRAFT_KEY = 'salt-logo-draft', SHORT_KEY = 'salt-logo-shortlist';
+function defaults() {
+  return {
+    name: 'SALT', tagline: 'A Home Church', smallPrint: 'Salt of the Earth · Matthew 5:13',
+    words: ['', '', '', ''], showWords: true,
+    style: 'house', icon: 'cross', customSrc: null, tint: true, iconScale: 1, iconY: 0, stroke: 1.6,
+    fontMain: 'Cinzel', fontSub: 'Cormorant Garamond', weight: 700, tracking: 0.12, capsTagline: true,
+    colors: pick(PALETTES[0]), paletteName: PALETTES[0].name, transparent: false, radius: 0.22,
+    exportScale: 2,
+  };
+}
+function pick(p) { return { bg: p.bg, primary: p.primary, accent: p.accent, muted: p.muted }; }
+const clone = o => JSON.parse(JSON.stringify(o));
+function store(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} }
+function load(key) { try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; } }
+
+let state = Object.assign(defaults(), load(DRAFT_KEY) || {});
+let shortlist = load(SHORT_KEY) || [];
+let stepIndex = 0;
+
+function syncWords() {
+  const L = letters(state);
+  state.words = L.map((_, i) => state.words[i] || '');
+}
+
+/* =====================================================================
+   RENDERING
+   ===================================================================== */
+function renderTo(canvas, s, pxWidth) {
+  const st = STYLES[s.style] || STYLES.wordmark;
+  const k = pxWidth / st.w;
+  canvas.width = Math.round(st.w * k);
+  canvas.height = Math.round(st.h * k);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(k, 0, 0, k, 0, 0);
+  ctx.clearRect(0, 0, st.w, st.h);
+  st.draw(ctx, s, st.w, st.h);
+}
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+const thumbW = () => 200 * DPR;
+
+let raf = 0;
+function scheduleRender() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; renderAll(); }); }
+function renderAll() {
+  renderTo(document.getElementById('preview'), state, STYLES[state.style].w);
+  const st = STYLES[state.style];
+  document.getElementById('stageInfo').textContent =
+    `${st.label} · ${state.fontMain} / ${state.fontSub} · ${state.paletteName}`;
+  renderStepThumbs();
+}
+
+const STEPS = [
+  { key: 'name', label: 'Name' }, { key: 'style', label: 'Style' }, { key: 'icon', label: 'Symbol' },
+  { key: 'type', label: 'Type' }, { key: 'colour', label: 'Colour' }, { key: 'review', label: 'Test & export' },
+];
+
+// Live thumbnails: each option is your current logo with just that one thing changed
+function renderStepThumbs() {
+  const key = STEPS[stepIndex].key;
+  if (key === 'style') {
+    document.querySelectorAll('#styleThumbs .thumb').forEach(b => {
+      renderTo(b.querySelector('canvas'), { ...state, style: b.dataset.key }, thumbW());
+      b.classList.toggle('selected', state.style === b.dataset.key);
+    });
+  }
+  if (key === 'type') {
+    document.querySelectorAll('#fontThumbs .thumb').forEach((b, i) => {
+      const p = PAIRINGS[i];
+      renderTo(b.querySelector('canvas'), { ...state, fontMain: p.main, fontSub: p.sub, weight: p.weight }, thumbW());
+      b.classList.toggle('selected', state.fontMain === p.main && state.fontSub === p.sub);
+    });
+  }
+  if (key === 'colour') {
+    document.querySelectorAll('#paletteThumbs .thumb').forEach((b, i) => {
+      const p = PALETTES[i];
+      renderTo(b.querySelector('canvas'), { ...state, colors: pick(p), transparent: false }, thumbW());
+      b.classList.toggle('selected', state.paletteName === p.name);
+    });
+  }
+  if (key === 'icon') {
+    document.querySelectorAll('#iconGrid .icon-btn').forEach(b => b.classList.toggle('selected', state.icon === b.dataset.key));
+  }
+  if (key === 'review') {
+    CONTEXTS.forEach((cx, i) => renderTo(document.querySelector(`#contexts [data-i="${i}"] canvas`), cx.mod(state), 220 * DPR));
+    document.querySelectorAll('#sizes canvas').forEach(cv => {
+      const w = +cv.dataset.w;
+      renderTo(cv, state, w * DPR);
+      cv.style.width = w + 'px';
+    });
+  }
+}
+
+const CONTEXTS = [
+  { label: 'As designed', bg: 'transparent', mod: s => s },
+  { label: 'Inverted', bg: 'transparent', mod: s => ({ ...s, transparent: false, colors: { ...s.colors, bg: s.colors.primary, primary: s.colors.bg, muted: s.colors.bg } }) },
+  { label: 'One colour, white on dark', bg: '#23262b', mod: s => ({ ...s, transparent: true, tint: true, colors: { bg: '#23262b', primary: '#fff', accent: '#fff', muted: '#fff' } }) },
+  { label: 'One colour, black on white', bg: '#ffffff', mod: s => ({ ...s, transparent: true, tint: true, colors: { bg: '#ffffff', primary: '#111', accent: '#111', muted: '#111' } }) },
+];
+
+/* =====================================================================
+   UI BUILD
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+
+function thumbButton(name, desc) {
+  const b = document.createElement('button');
+  b.className = 'thumb';
+  b.innerHTML = `<div class="frame"><canvas></canvas></div><div><div class="t-name"></div>${desc ? '<div class="t-desc"></div>' : ''}</div>`;
+  b.querySelector('.t-name').textContent = name;
+  if (desc) b.querySelector('.t-desc').textContent = desc;
+  return b;
+}
+
+function buildUI() {
+  // stepper
+  const nav = $('steps');
+  STEPS.forEach((st, i) => {
+    const b = document.createElement('button');
+    b.className = 'step-btn';
+    b.innerHTML = `<span class="n">${i + 1}</span>${st.label}`;
+    b.onclick = () => goStep(i);
+    nav.appendChild(b);
+  });
+
+  // tagline chips
+  TAGLINES.forEach(t => {
+    const c = document.createElement('button');
+    c.className = 'chip'; c.textContent = t;
+    c.onclick = () => { state.tagline = t; syncControls(); changed(); };
+    $('taglineChips').appendChild(c);
+  });
+  SMALL_PRINTS.forEach(t => {
+    const c = document.createElement('button');
+    c.className = 'chip'; c.textContent = t;
+    c.onclick = () => { state.smallPrint = t; syncControls(); changed(); };
+    $('smallPrintChips').appendChild(c);
+  });
+
+  // styles
+  Object.entries(STYLES).forEach(([key, st]) => {
+    const b = thumbButton(st.label, st.desc);
+    b.dataset.key = key;
+    b.onclick = () => { state.style = key; changed(); };
+    $('styleThumbs').appendChild(b);
+  });
+
+  // icons
+  const grid = $('iconGrid');
+  const none = document.createElement('button');
+  none.className = 'icon-btn'; none.dataset.key = 'none';
+  none.innerHTML = '<span class="none">None</span>';
+  grid.appendChild(none);
+  let lastGroup = null;
+  Object.entries(ICONS).forEach(([key, ic]) => {
+    const group = ic.group || 'Salt & faith';
+    if (group !== lastGroup) {
+      const h = document.createElement('div');
+      h.className = 'grp'; h.textContent = group;
+      grid.appendChild(h); lastGroup = group;
+    }
+    const b = document.createElement('button');
+    b.className = 'icon-btn'; b.dataset.key = key; b.title = ic.label;
+    const paint = ic.fill ? 'fill="currentColor" stroke="none"' : 'fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"';
+    b.innerHTML = `<svg viewBox="0 0 24 24" ${paint}><path d="${ic.d}"/></svg>`;
+    grid.appendChild(b);
+  });
+  const custom = document.createElement('button');
+  custom.className = 'icon-btn'; custom.dataset.key = 'custom'; custom.title = 'Your upload';
+  custom.innerHTML = '<span class="none">Upload</span>';
+  grid.appendChild(custom);
+  grid.querySelectorAll('.icon-btn').forEach(b => b.onclick = () => {
+    if (b.dataset.key === 'custom' && !state.customSrc) { $('upload').click(); return; }
+    state.icon = b.dataset.key; changed();
+  });
+  $('upload').onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => { state.customSrc = r.result; state.icon = 'custom'; changed(); toast('Icon uploaded'); };
+    r.readAsDataURL(f);
+  };
+
+  // fonts
+  ['fontMain', 'fontSub'].forEach(id => {
+    const sel = $(id);
+    ['Serif', 'Sans', 'Display'].forEach(cat => {
+      const g = document.createElement('optgroup'); g.label = cat;
+      FONTS.filter(f => f.cat === cat).forEach(f => { const o = new Option(f.name, f.name); g.appendChild(o); });
+      sel.appendChild(g);
+    });
+  });
+  PAIRINGS.forEach(p => {
+    const b = thumbButton(p.name, `${p.main} + ${p.sub}`);
+    b.onclick = () => { Object.assign(state, { fontMain: p.main, fontSub: p.sub, weight: p.weight }); syncControls(); changed(); };
+    $('fontThumbs').appendChild(b);
+  });
+
+  // palettes
+  PALETTES.forEach(p => {
+    const b = thumbButton(p.name);
+    b.onclick = () => { state.colors = pick(p); state.paletteName = p.name; syncControls(); changed(); };
+    $('paletteThumbs').appendChild(b);
+  });
+  document.querySelectorAll('[data-color]').forEach(el => el.addEventListener('input', () => {
+    state.colors[el.dataset.color] = el.value; state.paletteName = 'Custom palette'; changed();
+  }));
+  $('invert').onclick = () => {
+    const c = state.colors; [c.bg, c.primary] = [c.primary, c.bg];
+    state.paletteName = 'Custom palette'; syncControls(); changed();
+  };
+
+  // review contexts
+  CONTEXTS.forEach((cx, i) => {
+    const d = document.createElement('div');
+    d.className = 'ctx'; d.dataset.i = i;
+    d.innerHTML = `<div class="frame" style="background:${cx.bg === 'transparent' ? 'var(--bg)' : cx.bg}"><canvas></canvas></div><div class="cap"></div>`;
+    d.querySelector('.cap').textContent = cx.label;
+    $('contexts').appendChild(d);
+  });
+  [160, 80, 40].forEach(w => {
+    const f = document.createElement('figure');
+    f.innerHTML = `<canvas data-w="${w}"></canvas>${w}px`;
+    $('sizes').appendChild(f);
+  });
+
+  // generic bindings: data-bind="key" maps an input straight onto state[key]
+  document.querySelectorAll('[data-bind]').forEach(el => el.addEventListener('input', () => {
+    const k = el.dataset.bind;
+    state[k] = el.type === 'checkbox' ? el.checked
+      : (el.type === 'range' || 'num' in el.dataset) ? parseFloat(el.value) : el.value;
+    if (k === 'name') { syncWords(); buildWords(); }
+    if (k === 'transparent') syncControls();
+    updateOutputs(); changed();
+  }));
+
+  $('suggestWords').onclick = () => {
+    const L = letters(state);
+    const key = L.join('').toUpperCase();
+    if (key === 'SALT') {
+      let idea;
+      do { idea = ACRONYM_IDEAS[Math.floor(Math.random() * ACRONYM_IDEAS.length)]; }
+      while (idea.join() === state.words.join() && ACRONYM_IDEAS.length > 1);
+      state.words = [...idea];
+    } else {
+      state.words = L.map(ch => { const opts = LETTER_IDEAS[ch.toUpperCase()] || []; return opts[Math.floor(Math.random() * opts.length)] || ''; });
+    }
+    state.showWords = true; syncControls(); changed();
+  };
+  $('iconYReset').onclick = () => { state.iconY = 0; syncControls(); changed(); };
+  $('clearWords').onclick =() => { state.words = state.words.map(() => ''); syncControls(); changed(); };
+
+  $('back').onclick = () => goStep(stepIndex - 1);
+  $('next').onclick = () => goStep(stepIndex + 1);
+  $('saveShort').onclick = saveToShortlist;
+  $('quickExport').onclick = () => exportPNG(state, state.exportScale);
+  $('exportBtn').onclick = () => exportPNG(state, state.exportScale);
+  $('exportAll').onclick = () => {
+    if (!shortlist.length) { toast('Your shortlist is empty'); return; }
+    (async () => {
+      for (let i = 0; i < shortlist.length; i++) {
+        await exportPNG(shortlist[i], state.exportScale, `-option-${i + 1}`);
+        await new Promise(r => setTimeout(r, 400));
+      }
+    })();
+  };
+  $('copyJson').onclick = async () => {
+    const s = { ...state, customSrc: state.customSrc ? '(uploaded image)' : null };
+    try { await navigator.clipboard.writeText(JSON.stringify(s, null, 2)); toast('Settings copied'); }
+    catch (e) { toast('Could not access the clipboard'); }
+  };
+  // two-click confirm (browser confirm() dialogs are blocked in some embeds)
+  $('resetAll').onclick = () => {
+    const b = $('resetAll');
+    if (!b.dataset.armed) {
+      b.dataset.armed = '1'; b.textContent = 'Click again to reset';
+      setTimeout(() => { delete b.dataset.armed; b.textContent = 'Start over'; }, 3000);
+      return;
+    }
+    delete b.dataset.armed; b.textContent = 'Start over';
+    state = defaults(); syncControls(); changed(); goStep(0); toast('Reset. Your shortlist is kept');
+  };
+  $('surprise').onclick = surprise;
+}
+
+function buildWords() {
+  const wrap = $('words');
+  const L = letters(state);
+  wrap.innerHTML = '';
+  L.forEach((ch, i) => {
+    const row = document.createElement('div');
+    row.className = 'word-row';
+    const b = document.createElement('b'); b.textContent = ch.toUpperCase();
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.value = state.words[i] || '';
+    inp.placeholder = (LETTER_IDEAS[ch.toUpperCase()] || ['…'])[0] + '…';
+    inp.oninput = () => { state.words[i] = inp.value; changed(); };
+    row.append(b, inp); wrap.appendChild(row);
+  });
+}
+
+function syncControls() {
+  document.querySelectorAll('[data-bind]').forEach(el => {
+    const v = state[el.dataset.bind];
+    if (el.type === 'checkbox') el.checked = !!v; else el.value = v;
+  });
+  document.querySelectorAll('[data-color]').forEach(el => el.value = state.colors[el.dataset.color]);
+  buildWords(); updateOutputs();
+}
+function updateOutputs() {
+  const fmt = { radius: v => Math.round(v * 200) + '%', iconScale: v => Math.round(v * 100) + '%',
+    iconY: v => v === 0 ? 'centred' : (v < 0 ? '↑ up ' : '↓ down ') + Math.round(Math.abs(v) * 100) + '%', stroke: v => v.toFixed(1), tracking: v => v.toFixed(2) + ' em' };
+  document.querySelectorAll('output[data-for]').forEach(o => o.textContent = fmt[o.dataset.for](state[o.dataset.for]));
+}
+
+function goStep(i) {
+  stepIndex = Math.max(0, Math.min(STEPS.length - 1, i));
+  document.querySelectorAll('.step-panel').forEach(p => p.classList.toggle('active', p.dataset.step === STEPS[stepIndex].key));
+  document.querySelectorAll('.step-btn').forEach((b, j) => {
+    b.classList.toggle('active', j === stepIndex);
+    b.classList.toggle('done', j < stepIndex);
+  });
+  $('back').disabled = stepIndex === 0;
+  $('back').style.visibility = stepIndex === 0 ? 'hidden' : 'visible';
+  $('next').textContent = stepIndex === STEPS.length - 1 ? '♡ Save to shortlist' : `Next: ${STEPS[stepIndex + 1].label} →`;
+  $('next').onclick = stepIndex === STEPS.length - 1 ? saveToShortlist : () => goStep(stepIndex + 1);
+  document.querySelector('.panel-body').scrollTop = 0;
+  scheduleRender();
+}
+
+function changed() { store(DRAFT_KEY, state); scheduleRender(); }
+
+/* ---------- shortlist ---------- */
+function saveToShortlist() {
+  shortlist.push(clone(state));
+  if (shortlist.length > 30) shortlist.shift();
+  store(SHORT_KEY, shortlist);
+  renderShortlist();
+  toast(`Saved to shortlist (${shortlist.length})`);
+}
+function renderShortlist() {
+  const wrap = $('shortlist');
+  wrap.innerHTML = '';
+  if (!shortlist.length) {
+    wrap.innerHTML = '<span class="empty">♡ Your shortlist is empty. Save options you like as you go, then compare them here.</span>';
+    return;
+  }
+  shortlist.forEach((s, i) => {
+    const item = document.createElement('div'); item.className = 'short-item';
+    const pickBtn = document.createElement('button'); pickBtn.className = 'pick'; pickBtn.title = 'Load this option';
+    const cv = document.createElement('canvas'); pickBtn.appendChild(cv);
+    pickBtn.onclick = () => { state = Object.assign(defaults(), clone(s)); syncControls(); changed(); toast(`Loaded option ${i + 1}`); };
+    const x = document.createElement('button'); x.className = 'x'; x.textContent = '✕'; x.title = 'Remove';
+    x.onclick = () => { shortlist.splice(i, 1); store(SHORT_KEY, shortlist); renderShortlist(); };
+    item.append(pickBtn, x); wrap.appendChild(item);
+    renderTo(cv, s, 240);
+  });
+}
+
+/* ---------- export ---------- */
+// When hosted as a claude.ai Artifact, downloads go through its `downloads` capability;
+// opened as a plain local file, a normal <a download> link is used.
+let downloadsApi = null;
+if (window.claude && window.claude.use) window.claude.use('downloads').then(d => { downloadsApi = d; }, () => {});
+
+async function exportPNG(s, scale = 2, suffix = '') {
+  const st = STYLES[s.style];
+  const c = document.createElement('canvas');
+  renderTo(c, s, st.w * scale);
+  const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+  const slug = (s.name || 'logo').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const filename = `${slug}-${s.style}${suffix}-${c.width}x${c.height}.png`;
+  if (downloadsApi) {
+    try { await downloadsApi.save({ filename, data: blob }); toast('PNG saved'); }
+    catch (e) { if (e && e.code !== 'declined') toast('Could not save the PNG here'); }
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+
+/* ---------- surprise ---------- */
+function surprise() {
+  const r = arr => arr[Math.floor(Math.random() * arr.length)];
+  const p = r(PAIRINGS), pal = r(PALETTES);
+  Object.assign(state, {
+    style: r(Object.keys(STYLES)), icon: r(Object.keys(ICONS)),
+    fontMain: p.main, fontSub: p.sub, weight: p.weight,
+    colors: pick(pal), paletteName: pal.name,
+    tracking: r([0, 0.04, 0.12, 0.2, 0.3]), radius: r([0, 0.12, 0.22, 0.5]),
+  });
+  syncControls(); changed();
+}
+
+let toastTimer;
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+/* ---------- fonts: load every family, re-render as each arrives ---------- */
+function loadFonts() {
+  FONTS.forEach(f => {
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = `https://fonts.googleapis.com/css2?family=${f.name.replace(/ /g, '+')}:wght@${f.weights.join(';')}&display=swap`;
+    l.onload = () => Promise.all(f.weights.map(w => document.fonts.load(`${w} 40px "${f.name}"`))).then(scheduleRender, scheduleRender);
+    document.head.appendChild(l);
+  });
+}
+
+/* ---------- boot ---------- */
+syncWords();
+buildUI();
+syncControls();
+renderShortlist();
+goStep(0);
+loadFonts();
+</script>
+</body>
+</html>
